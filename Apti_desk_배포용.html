@@ -1,0 +1,1839 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apti desk</title>
+<link rel="icon" type="image/png" sizes="64x64" href="./apti_desk_icon.png?v=20260331">
+<link rel="icon" type="image/svg+xml" href="./apti_desk_icon.svg?v=20260331">
+<link rel="shortcut icon" href="./apti_desk_icon.png?v=20260331">
+<script>
+/* ════════════════════════════
+   공유용 수정 영역
+   최초 실행 전 아래 값만 바꿔서 저장하면 됩니다.
+   1. 자신의 Google Apps Script 웹앱 URL로 교체
+   2. 반드시 /exec 로 끝나는 배포 URL 사용
+════════════════════════════ */
+window.APTI_SHARE_CONFIG = Object.freeze({
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/{SCRIPT_ID}/exec'
+});
+</script>
+<style>
+/* ── 기본 리셋 ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #F4F5F2;
+  --surface:  #FFFFFF;
+  --border:   #D6D9D1;
+  --sky:      #738B7B;
+  --sky-dark: #5C6F61;
+  --sky-pale: #D2D9CE;
+  --text:     #1E293B;
+  --muted:    #64748B;
+  --radius:   10px;
+  --shadow:   0 2px 8px rgba(0,0,0,0.08);
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+button { cursor: pointer; font-family: inherit; }
+button:disabled { cursor: wait; opacity: .65; filter: none; }
+
+/* ══════════════════════════════
+   레이아웃: OMR(left) + Main(right)
+══════════════════════════════ */
+#app-shell {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+#app-header {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  background:
+    radial-gradient(circle at top left, rgba(115,139,123,.18), transparent 34%),
+    linear-gradient(135deg, #FBFCF8 0%, #EEF2EA 100%);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.header-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.header-brand {
+  min-width: 160px;
+  max-width: 200px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-logo {
+  width: 63px;
+  height: 63px;
+  flex-shrink: 0;
+  display: block;
+  object-fit: contain;
+  filter: drop-shadow(0 3px 8px rgba(61,107,94,.16));
+}
+
+.brand-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+
+.brand-chip {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(115,139,123,.12);
+  color: var(--sky-dark);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.brand-title {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -.03em;
+  color: #233127;
+}
+
+.header-controls {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-summary {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 2px;
+}
+
+.summary-text {
+  min-width: 0;
+  max-width: 100%;
+  font-size: 12px;
+  font-weight: 700;
+  color: #314238;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+}
+
+.header-field {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(115,139,123,.14);
+  border-radius: 12px;
+  background: rgba(255,255,255,.72);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.45);
+}
+
+.header-field label {
+  display: block;
+  margin-bottom: 0;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: .02em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.header-field select,
+.header-field input[type=text] {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 11px;
+  background: rgba(255,255,255,.95);
+  color: var(--text);
+  outline: none;
+}
+
+.header-field select:focus,
+.header-field input[type=text]:focus {
+  border-color: var(--sky);
+}
+
+.field-inputs {
+  flex: 1;
+  min-width: 0;
+}
+
+.header-toggle {
+  padding: 0 12px;
+  min-height: 40px;
+  border: 1px solid rgba(115,139,123,.18);
+  border-radius: 10px;
+  background: rgba(255,255,255,.78);
+  color: var(--sky-dark);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.header-actions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.header-actions button {
+  width: auto;
+  padding: 0 10px;
+  min-height: 40px;
+  border: none;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
+
+.header-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+#header-panel {
+  display: none;
+  grid-template-columns: minmax(200px, 1fr) minmax(260px, 1.2fr);
+  gap: 10px;
+}
+
+#header-panel.show {
+  display: grid;
+}
+
+#layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+/* ── OMR 패널 ── */
+#omr-wrap {
+  width: 272px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-right: 1.5px solid var(--border);
+  transition: margin-left .28s cubic-bezier(.4,0,.2,1);
+  z-index: 10;
+}
+#omr-wrap.collapsed { margin-left: -272px; }
+
+#omr-head {
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#omr-head h2 {
+  font-size: 14px; font-weight: 700;
+  color: var(--sky-dark);
+  letter-spacing: -.3px;
+  margin-bottom: 12px;
+}
+
+.omr-btns { display: flex; gap: 7px; margin-bottom: 10px; }
+.omr-btns button {
+  flex: 1; padding: 7px 0;
+  border: none; border-radius: 7px;
+  font-size: 12px; font-weight: 600;
+  transition: filter .15s;
+}
+.omr-btns button:hover { filter: brightness(.92); }
+#btn-score     { background: var(--sky); color: #fff; }
+#btn-reset-ans { background: #E2E8F0; color: var(--muted); }
+
+.q-count-row {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--muted);
+}
+.q-count-row input[type=number] {
+  width: 54px; padding: 4px 6px;
+  border: 1.5px solid var(--border); border-radius: 6px;
+  font-size: 12px; color: var(--text); background: var(--bg);
+  outline: none;
+}
+.q-count-row input[type=number]:focus { border-color: var(--sky); }
+.q-count-row button {
+  padding: 4px 10px;
+  background: var(--sky-pale); color: var(--sky-dark);
+  border: none; border-radius: 6px; font-size: 12px; font-weight: 600;
+}
+.q-count-row button:hover { background: var(--sky); color: #fff; }
+
+/* OMR 목록 */
+#omr-list {
+  flex: 1; overflow-y: auto;
+  padding: 6px 10px;
+}
+#omr-list::-webkit-scrollbar { width: 4px; }
+#omr-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+.omr-row {
+  display: flex; align-items: center;
+  padding: 3px 0; border-bottom: 1px solid #F1F5F9;
+}
+.q-num {
+  width: 24px; text-align: center;
+  font-size: 11px; font-weight: 700; color: var(--muted);
+  flex-shrink: 0;
+}
+.choices { display: flex; gap: 4px; flex: 1; justify-content: center; }
+
+.choice-btn {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--muted); font-size: 12px; font-weight: 600;
+  transition: all .15s;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.choice-btn:hover {
+  border-color: var(--sky);
+  color: var(--sky);
+  background: var(--sky-pale);
+}
+.choice-btn.on {
+  background: var(--sky);
+  border-color: var(--sky);
+  color: #fff;
+}
+
+#omr-foot {
+  padding: 8px 14px;
+  border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--muted);
+  text-align: center; flex-shrink: 0;
+}
+#omr-foot span { color: var(--sky-dark); font-weight: 700; }
+
+/* OMR 토글 탭 */
+#omr-tab {
+  position: absolute;
+  left: 272px;
+  top: 15px;
+  transform: none;
+  z-index: 20;
+  background: var(--sky);
+  color: #fff;
+  border: none;
+  border-radius: 0 7px 7px 0;
+  padding: 16px 5px;
+  font-size: 11px;
+  font-weight: 700;
+  writing-mode: vertical-rl;
+  letter-spacing: 1.5px;
+  box-shadow: 2px 0 6px rgba(0,0,0,0.1);
+  transition: left .28s cubic-bezier(.4,0,.2,1), background .15s;
+}
+#omr-tab:hover { background: var(--sky-dark); }
+#layout.omr-off #omr-tab { left: 0; }
+
+/* ── 메인 패널 ── */
+#main {
+  flex: 1; min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  gap: 10px;
+  overflow: hidden;
+}
+
+/* 카드 공통 */
+.card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1.5px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+/* ── 타이머 카드 ── */
+#timer-card {
+  padding: 14px 18px;
+  display: flex; flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+#timer-select {
+  padding: 6px 8px;
+  background: var(--bg); color: var(--text);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 11px; font-weight: 600;
+  outline: none; cursor: pointer;
+  transition: border-color .15s;
+}
+#timer-select:hover { border-color: var(--sky); }
+#timer-select:focus { border-color: var(--sky); }
+#timer-display {
+  font-size: 22px; font-weight: 800;
+  color: var(--text); letter-spacing: .5px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+#timer-display.warn  { color: #F59E0B; }
+#timer-display.alert { color: #EF4444; animation: blink .9s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
+.timer-btns { display: flex; gap: 7px; }
+.timer-btns button {
+  padding: 7px 20px;
+  border: none; border-radius: 7px;
+  font-size: 13px; font-weight: 700;
+  transition: filter .15s;
+}
+.timer-btns button:hover { filter: brightness(.92); }
+#btn-start       { background: #738B7B; color: #fff; }
+#btn-start.pause { background: #9E9076; color: #fff; }
+#btn-start.resume{ background: #7A8BA0; color: #fff; }
+#btn-treset      { background: #E8E9E6; color: var(--muted); }
+
+/* ── 하단: 메모+계산기 세로 배열 ── */
+#bottom {
+  flex: 1; min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 메모장/그림판 카드 */
+#note-card {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+/* 탭 바 */
+.tab-bar {
+  display: flex;
+  border-bottom: 1.5px solid var(--border);
+  flex-shrink: 0;
+}
+.tab-btn {
+  flex: 1; padding: 9px 0;
+  background: transparent; border: none;
+  font-size: 13px; font-weight: 600;
+  color: var(--muted);
+  transition: all .15s;
+}
+.tab-btn:hover { color: var(--sky-dark); }
+.tab-btn.on {
+  color: var(--sky-dark);
+  border-bottom: 2.5px solid var(--sky);
+  margin-bottom: -1.5px;
+}
+
+.pane { display: none; flex: 1; flex-direction: column; min-height: 0; }
+.pane.on { display: flex; }
+
+/* 메모장 */
+#memo {
+  flex: 1; resize: none; border: none; outline: none;
+  padding: 12px 14px;
+  font-family: inherit; font-size: 13.5px;
+  color: var(--text); background: transparent;
+  line-height: 1.75;
+}
+#memo::placeholder { color: #B0BEC5; }
+
+.pane-foot {
+  display: flex; justify-content: flex-end;
+  padding: 7px 12px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.pane-foot button {
+  padding: 5px 14px;
+  background: var(--sky-pale); color: var(--sky-dark);
+  border: none; border-radius: 6px;
+  font-size: 12px; font-weight: 600;
+}
+.pane-foot button:hover { background: var(--sky); color: #fff; }
+
+/* 그림판 */
+#canvas-wrap {
+  flex: 1; min-height: 0; position: relative; overflow: hidden;
+  background: #FAFCFF;
+}
+#draw-canvas {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  touch-action: none; cursor: crosshair;
+  display: block;
+}
+.canvas-bar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 7px 12px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0; background: var(--surface);
+}
+.canvas-bar label { font-size: 11px; color: var(--muted); }
+.canvas-bar input[type=color] {
+  width: 28px; height: 24px; border: none;
+  border-radius: 5px; cursor: pointer; padding: 0; background: none;
+}
+.canvas-bar input[type=range] { width: 68px; accent-color: var(--sky); }
+.canvas-bar select {
+  padding: 3px 6px; border-radius: 6px;
+  border: 1.5px solid var(--border);
+  font-size: 12px; color: var(--text); background: var(--bg);
+  outline: none;
+}
+.canvas-bar select:focus { border-color: var(--sky); }
+.cv-sep { width: 1px; height: 16px; background: var(--border); }
+.canvas-bar button {
+  padding: 4px 11px;
+  background: var(--sky-pale); color: var(--sky-dark);
+  border: none; border-radius: 6px; font-size: 12px; font-weight: 600;
+}
+.canvas-bar button:hover { background: var(--sky); color: #fff; }
+
+/* ── 계산기 카드 ── */
+#calc-card {
+  flex-shrink: 0;
+  padding: 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+#calc-head {
+  font-size: 12px; font-weight: 700;
+  color: var(--muted); letter-spacing: .3px;
+}
+#calc-expr-row {
+  font-size: 17px; color: #94A3B8;
+  text-align: right; min-height: 21px;
+  padding: 0 2px; word-break: break-all;
+}
+#calc-disp {
+  background: var(--bg); border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 22px; font-weight: 800;
+  text-align: right; color: var(--text);
+  min-height: 48px;
+  display: flex; align-items: flex-end; justify-content: flex-end;
+  word-break: break-all;
+}
+.calc-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+}
+.cb {
+  height: 38px; border: none; border-radius: 7px;
+  font-size: 14px; font-weight: 700;
+  transition: filter .1s, transform .08s;
+  display: flex; align-items: center; justify-content: center;
+}
+.cb:hover  { filter: brightness(.93); }
+.cb:active { transform: scale(.95); }
+.cb.n  { background: #F1F5F9; color: var(--text); }
+.cb.op { background: var(--sky-pale); color: var(--sky-dark); }
+.cb.fn { background: #E2E8F0; color: var(--muted); }
+.cb.eq { background: var(--sky); color: #fff; grid-row: span 2; height: auto; }
+.cb.z2 { grid-column: span 2; }
+
+/* ── 채점 모달 ── */
+#modal-bg {
+  display: none; position: fixed; inset: 0;
+  background: rgba(15,23,42,.45);
+  z-index: 999; align-items: center; justify-content: center;
+  backdrop-filter: blur(3px);
+}
+#modal-bg.show { display: flex; }
+.modal {
+  background: var(--surface);
+  border-radius: 16px;
+  border: 1.5px solid var(--border);
+  box-shadow: 0 12px 40px rgba(0,0,0,.15);
+  padding: 32px 36px;
+  min-width: 300px; text-align: center;
+}
+.modal h2 { font-size: 17px; color: var(--text); margin-bottom: 16px; }
+.modal .big {
+  font-size: 52px; font-weight: 800;
+  color: var(--sky-dark); line-height: 1.1;
+}
+.modal .sub { font-size: 13px; color: var(--muted); margin: 10px 0 22px; }
+.modal button {
+  padding: 9px 28px;
+  background: var(--sky); color: #fff;
+  border: none; border-radius: 8px;
+  font-size: 13px; font-weight: 700;
+}
+.modal button:hover { background: var(--sky-dark); }
+
+/* 채점 테이블 */
+.score-table {
+  width: 100%; margin: 16px 0;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.score-table thead {
+  background: var(--bg);
+  border-bottom: 1.5px solid var(--border);
+}
+.score-table th {
+  padding: 8px 0; color: var(--muted); font-weight: 600;
+  text-align: center;
+}
+.score-table td {
+  padding: 8px 0; color: var(--text);
+  text-align: center; border-bottom: 1px solid var(--border);
+}
+.score-table tbody tr:last-child td { border-bottom: none; }
+
+/* 스크롤바 */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+#loading-overlay {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(30, 41, 59, 0.26);
+  backdrop-filter: blur(2px);
+  z-index: 10000;
+}
+#loading-overlay.show { display: flex; }
+.loading-box {
+  min-width: 180px;
+  padding: 18px 20px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.96);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.14);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.loading-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--sky-pale);
+  border-top-color: var(--sky);
+  animation: loading-spin .8s linear infinite;
+  flex-shrink: 0;
+}
+.loading-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sky-dark);
+}
+.inline-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.inline-toggle-row input[type=text] {
+  flex: 1;
+  min-width: 0;
+}
+.mini-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--sky-dark);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.mini-toggle input {
+  margin: 0;
+}
+
+#test-date-info {
+  padding: 4px 8px;
+  background: rgba(255,255,255,.72);
+  border: 1px solid rgba(115,139,123,.15);
+  border-radius: 999px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+@media (max-width: 1100px) {
+  .header-brand {
+    max-width: none;
+  }
+
+  .header-controls {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .header-meta {
+    display: none;
+  }
+
+  #layout {
+    height: auto;
+    min-height: 0;
+    flex: 1;
+  }
+}
+
+@media (max-width: 720px) {
+  .header-brand {
+    gap: 8px;
+  }
+
+  .brand-logo {
+    width: 57px;
+    height: 57px;
+  }
+
+  .header-controls {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  #header-panel {
+    grid-template-columns: 1fr;
+  }
+}
+@keyframes loading-spin {
+  to { transform: rotate(360deg); }
+}
+</style>
+</head>
+<body>
+
+<div id="loading-overlay" aria-live="polite" aria-hidden="true">
+  <div class="loading-box">
+    <div class="loading-spinner"></div>
+    <div class="loading-text" id="loading-text">처리 중...</div>
+  </div>
+</div>
+
+<div id="app-shell">
+  <header id="app-header">
+    <div class="header-top">
+      <div class="header-brand">
+        <img class="brand-logo" src="./apti_desk_icon.png?v=20260331" alt="Apti Desk logo">
+        <div class="brand-copy">
+          <div class="brand-chip">Study OS</div>
+          <div class="brand-title">Apti Desk</div>
+        </div>
+      </div>
+
+      <div class="header-controls">
+        <div class="header-summary">
+          <div class="summary-text" id="selection-summary">📍 시험 미선택 | 회차 미선택</div>
+        </div>
+
+        <div class="header-meta">
+          <div id="test-date-info" style="display:none;">
+            생성일: <span id="test-date-display"></span>
+          </div>
+        </div>
+
+        <button id="btn-toggle-header" class="header-toggle">⚙️ 설정</button>
+
+        <div class="header-field header-actions">
+          <button id="btn-save-sheets" style="background:var(--sky); color:#fff;">💾 저장</button>
+          <button id="btn-load-sheets" style="background:var(--sky-pale); color:var(--sky-dark);">📥 불러오기</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="header-panel">
+      <div class="header-field field-test-name">
+        <label for="test-name">시험 이름</label>
+        <div class="field-inputs">
+          <select id="test-name">
+            <option value="">-- 선택 --</option>
+            <option value="삼성 GSAT">삼성 GSAT</option>
+            <option value="하이닉스 SKCT">하이닉스 SKCT</option>
+            <option value="new">+ 새 시험 추가</option>
+          </select>
+          <input type="text" id="test-name-new" placeholder="새 시험 이름" style="margin-top:6px; display:none;">
+        </div>
+      </div>
+
+      <div class="header-field field-test-round">
+        <label for="test-round">회차</label>
+        <div class="field-inputs">
+          <select id="test-round">
+            <option value="">-- 기존 회차 선택 또는 아래 입력 --</option>
+          </select>
+          <div class="inline-toggle-row" style="margin-top:6px;">
+            <input type="text" id="test-round-new" placeholder="새 회차 입력 (예: 2024년 상반기, 1회)">
+            <label class="mini-toggle">
+              <input type="checkbox" id="round-register-toggle">
+              등록
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+<div id="layout">
+
+  <!-- ══ OMR 패널 ══ -->
+  <div id="omr-wrap">
+    <div id="omr-head">
+      <h2>OMR 답안지</h2>
+
+      <div class="omr-btns">
+        <button id="btn-score">채점하기</button>
+        <button id="btn-reset-ans">답안 초기화</button>
+      </div>
+      <div class="q-count-row">
+        <span>문제 수</span>
+        <input type="number" id="q-count" value="100" min="1" max="200">
+        <button id="btn-apply">적용</button>
+      </div>
+    </div>
+    <div id="omr-list"></div>
+    <div id="omr-foot">
+      표시한 답안: <span id="ans-cnt">0</span> / <span id="tot-cnt">100</span>
+    </div>
+  </div>
+
+  <!-- OMR 토글 탭 -->
+  <button id="omr-tab">◀ OMR 숨기기</button>
+
+  <!-- ══ 메인 영역 ══ -->
+  <div id="main">
+
+    <!-- 타이머 -->
+    <div class="card" id="timer-card">
+      <select id="timer-select">
+        <option value="5">5분</option>
+        <option value="10">10분</option>
+        <option value="100" selected>100분</option>
+        <option value="custom">사용자 지정</option>
+      </select>
+      <div id="timer-display">00분 00초 / 100분</div>
+      <div class="timer-btns">
+        <button id="btn-start">시작</button>
+        <button id="btn-treset">리셋</button>
+      </div>
+    </div>
+
+    <!-- 하단 세로 배열 -->
+    <div id="bottom">
+
+      <!-- 메모장 / 그림판 -->
+      <div class="card" id="note-card">
+        <div class="tab-bar">
+          <button class="tab-btn on" data-p="memo">메모장</button>
+          <button class="tab-btn" data-p="draw">그림판</button>
+        </div>
+
+        <!-- 메모장 -->
+        <div class="pane on" id="pane-memo">
+          <textarea id="memo" placeholder="메모를 입력하세요..."></textarea>
+          <div class="pane-foot"><button id="btn-clear-memo">전체 지우기</button></div>
+        </div>
+
+        <!-- 그림판 -->
+        <div class="pane" id="pane-draw">
+          <div id="canvas-wrap">
+            <canvas id="draw-canvas"></canvas>
+          </div>
+          <div class="canvas-bar">
+            <label>색상</label>
+            <input type="color" id="pen-color" value="#1E293B">
+            <div class="cv-sep"></div>
+            <label>굵기</label>
+            <input type="range" id="pen-size" min="1" max="30" value="3">
+            <div class="cv-sep"></div>
+            <select id="pen-mode">
+              <option value="pen">펜</option>
+              <option value="eraser">지우개</option>
+            </select>
+            <div class="cv-sep"></div>
+            <button id="btn-undo">실행취소</button>
+            <button id="btn-clear-canvas">전체 지우기</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 계산기 -->
+      <div class="card" id="calc-card">
+        <div id="calc-head">계산기</div>
+        <div id="calc-expr-row"></div>
+        <div id="calc-disp">0</div>
+        <div class="calc-grid">
+          <button class="cb fn" data-v="(">(</button>
+          <button class="cb fn" data-v=")">)</button>
+          <button class="cb fn" data-v="%">%</button>
+          <button class="cb fn" data-v="C">C</button>
+
+          <button class="cb fn" data-v="AC">AC</button>
+          <button class="cb fn" data-v="+/-">+/-</button>
+          <button class="cb op" data-v="÷">÷</button>
+          <button class="cb op" data-v="×">×</button>
+
+          <button class="cb n" data-v="7">7</button>
+          <button class="cb n" data-v="8">8</button>
+          <button class="cb n" data-v="9">9</button>
+          <button class="cb op" data-v="-">-</button>
+
+          <button class="cb n" data-v="4">4</button>
+          <button class="cb n" data-v="5">5</button>
+          <button class="cb n" data-v="6">6</button>
+          <button class="cb op" data-v="+">+</button>
+
+          <button class="cb n" data-v="1">1</button>
+          <button class="cb n" data-v="2">2</button>
+          <button class="cb n" data-v="3">3</button>
+          <button class="cb eq" data-v="=">=</button>
+
+          <button class="cb n z2" data-v="0">0</button>
+          <button class="cb n" data-v=".">.</button>
+        </div>
+      </div>
+
+    </div><!-- /bottom -->
+  </div><!-- /main -->
+</div><!-- /layout -->
+</div><!-- /app-shell -->
+
+<!-- 채점 모달 -->
+<div id="modal-bg">
+  <div class="modal" id="score-modal">
+    <h2>채점 결과</h2>
+    <div class="big" id="m-score">0문제</div>
+    <table class="score-table" id="score-table" style="display:none;">
+      <thead>
+        <tr>
+          <th>문항</th>
+          <th>답</th>
+          <th>시간</th>
+        </tr>
+      </thead>
+      <tbody id="score-tbody"></tbody>
+    </table>
+    <div class="sub" id="m-detail"></div>
+    <button id="btn-close-modal">닫기</button>
+  </div>
+</div>
+
+<script>
+/* ════════════════════════════
+   Google Apps Script 연동
+════════════════════════════ */
+const APPS_SCRIPT_URL = window.APTI_SHARE_CONFIG?.APPS_SCRIPT_URL || '';
+let loadedSheetData = null;
+let isSheetRequestPending = false;
+let isHeaderPanelOpen = false;
+
+function buildFetchErrorMessage(action, err) {
+  if (window.location.protocol === 'file:') {
+    return `❌ ${action} 실패: 로컬 파일(file://)에서 실행 중이어서 차단되었거나 Apps Script 배포 권한이 맞지 않습니다. 새 웹앱 URL/배포 권한을 확인하세요.`;
+  }
+  return `❌ ${action} 실패: ${err.message}`;
+}
+
+function setSheetLoading(isLoading, message = '처리 중...') {
+  const overlay = document.getElementById('loading-overlay');
+  const text = document.getElementById('loading-text');
+  const saveBtn = document.getElementById('btn-save-sheets');
+  const loadBtn = document.getElementById('btn-load-sheets');
+  const registerToggle = document.getElementById('round-register-toggle');
+  const headerToggle = document.getElementById('btn-toggle-header');
+
+  isSheetRequestPending = isLoading;
+  saveBtn.disabled = isLoading;
+  loadBtn.disabled = isLoading;
+  if (registerToggle) registerToggle.disabled = isLoading;
+  if (headerToggle) headerToggle.disabled = isLoading;
+  text.textContent = message;
+  overlay.classList.toggle('show', isLoading);
+  overlay.setAttribute('aria-hidden', String(!isLoading));
+}
+
+function updateSelectionSummary() {
+  const testSelect = document.getElementById('test-name');
+  const testInput = document.getElementById('test-name-new');
+  const roundSelect = document.getElementById('test-round');
+  const roundInput = document.getElementById('test-round-new');
+  const summary = document.getElementById('selection-summary');
+
+  const selectedTest = testSelect.value === 'new' ? testInput.value.trim() : testSelect.value;
+  const selectedRound = roundSelect.value || roundInput.value.trim();
+  const testLabel = selectedTest || '시험 미선택';
+  const roundLabel = selectedRound || '회차 미선택';
+
+  summary.textContent = `📍 ${testLabel} | ${roundLabel}`;
+}
+
+function setHeaderPanelOpen(isOpen) {
+  const panel = document.getElementById('header-panel');
+  const toggle = document.getElementById('btn-toggle-header');
+
+  isHeaderPanelOpen = isOpen;
+  panel.classList.toggle('show', isOpen);
+  toggle.textContent = isOpen ? '⚙️ 접기' : '⚙️ 설정';
+}
+
+function updateRoundOptions(selectedTestName, selectedRound = '') {
+  const roundSelect = document.getElementById('test-round');
+  roundSelect.innerHTML = '<option value="">-- 기존 회차 선택 또는 아래 입력 --</option>';
+
+  if (!selectedTestName || selectedTestName === 'new' || !loadedSheetData) {
+    roundSelect.value = '';
+    return;
+  }
+
+  const rounds = new Set();
+  for (let i = 1; i < loadedSheetData.length; i++) {
+    const [testName, testRound] = loadedSheetData[i];
+    if (testName === selectedTestName && testRound) {
+      rounds.add(testRound);
+    }
+  }
+
+  Array.from(rounds).forEach(round => {
+    const option = document.createElement('option');
+    option.value = round;
+    option.textContent = round;
+    roundSelect.appendChild(option);
+  });
+
+  if (selectedRound && rounds.has(selectedRound)) {
+    roundSelect.value = selectedRound;
+  } else {
+    roundSelect.value = '';
+  }
+
+  updateSelectionSummary();
+}
+
+function loadSelectedSheetTest(showAlert = false) {
+  if (!loadedSheetData) return;
+
+  const testName = document.getElementById('test-name').value;
+  const testRound = document.getElementById('test-round').value;
+  if (!testName || !testRound) return;
+
+  loadTestData(testName, testRound, loadedSheetData, showAlert);
+}
+
+function ensureRoundOptionExists(testName, testRound) {
+  if (!testName || !testRound) return;
+
+  const roundSelect = document.getElementById('test-round');
+  const existingOption = Array.from(roundSelect.options).find(option => option.value === testRound);
+  if (!existingOption) {
+    const option = document.createElement('option');
+    option.value = testRound;
+    option.textContent = testRound;
+    roundSelect.appendChild(option);
+  }
+  roundSelect.value = testRound;
+
+  if (!loadedSheetData) return;
+
+  const hasRound = loadedSheetData.slice(1).some(row => row[0] === testName && row[1] === testRound);
+  if (!hasRound) {
+    loadedSheetData.push([testName, testRound, '', '', '', '']);
+  }
+}
+
+function cacheSavedRows(rows) {
+  if (!rows.length) return;
+
+  if (!loadedSheetData) {
+    loadedSheetData = [['시험명', '회차', '생성일', '문항', '답', '시간']];
+  }
+
+  rows.forEach(row => loadedSheetData.push([...row]));
+}
+
+// 시험 이름 선택 이벤트
+document.getElementById('test-name').addEventListener('change', () => {
+  const select = document.getElementById('test-name');
+  const newInput = document.getElementById('test-name-new');
+
+  if (select.value === 'new') {
+    newInput.style.display = 'block';
+    newInput.focus();
+  } else {
+    newInput.style.display = 'none';
+  }
+
+  updateRoundOptions(select.value);
+  updateSelectionSummary();
+});
+
+document.getElementById('test-round').addEventListener('change', () => {
+  updateSelectionSummary();
+  loadSelectedSheetTest(false);
+});
+
+document.getElementById('test-name-new').addEventListener('input', updateSelectionSummary);
+document.getElementById('test-round-new').addEventListener('input', updateSelectionSummary);
+document.getElementById('btn-toggle-header').addEventListener('click', () => {
+  setHeaderPanelOpen(!isHeaderPanelOpen);
+});
+
+document.getElementById('round-register-toggle').addEventListener('change', async e => {
+  if (!e.target.checked) return;
+
+  const testName = getTestName();
+  const newRound = document.getElementById('test-round-new').value.trim();
+
+  if (!testName) {
+    e.target.checked = false;
+    return;
+  }
+
+  if (!newRound) {
+    alert('등록할 새 회차를 입력해주세요.');
+    e.target.checked = false;
+    return;
+  }
+
+  ensureRoundOptionExists(testName, newRound);
+  updateSelectionSummary();
+  await saveToSheets();
+});
+
+function getTestName() {
+  const select = document.getElementById('test-name');
+  const newInput = document.getElementById('test-name-new');
+
+  if (select.value === 'new') {
+    const name = newInput.value.trim();
+    if (!name) {
+      alert('새 시험 이름을 입력해주세요.');
+      return null;
+    }
+    return name;
+  }
+
+  if (!select.value) {
+    alert('시험을 선택해주세요.');
+    return null;
+  }
+
+  return select.value;
+}
+
+async function saveToSheets() {
+  if (isSheetRequestPending) return;
+
+  const testName = getTestName();
+  if (!testName) return;
+
+  const roundSelect = document.getElementById('test-round');
+  const roundInput = document.getElementById('test-round-new');
+  let testRound = roundSelect.value || roundInput.value.trim();
+
+  if (!testRound) {
+    alert('회차를 선택하거나 입력해주세요.');
+    return;
+  }
+
+  // 오늘 날짜 추가
+  const today = new Date().toISOString().split('T')[0];
+
+  const rows = [];
+  Object.keys(answers).sort((a, b) => parseInt(a) - parseInt(b)).forEach(q => {
+    const data = answers[q];
+    rows.push([testName, testRound, today, q, data.choice, data.time]);
+  });
+
+  if (rows.length === 0) {
+    alert('저장할 답안이 없습니다.');
+    return;
+  }
+
+  try {
+    setSheetLoading(true, '저장 중...');
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify(rows),
+    });
+
+    if (response.ok) {
+      cacheSavedRows(rows);
+      ensureRoundOptionExists(testName, testRound);
+      updateSelectionSummary();
+      setHeaderPanelOpen(false);
+      alert(`✅ "${testName}" (${testRound})이 저장되었습니다!`);
+      document.getElementById('test-round-new').value = '';
+      document.getElementById('round-register-toggle').checked = false;
+    } else if (response.status === 401) {
+      alert('❌ 저장 실패: Apps Script 웹앱 접근 권한이 없습니다. 배포 설정을 "모든 사용자"로 다시 확인하세요.');
+    } else {
+      alert(`❌ 저장 실패: ${response.status} ${response.statusText}`);
+    }
+  } catch (err) {
+    document.getElementById('round-register-toggle').checked = false;
+    alert(buildFetchErrorMessage('저장', err));
+  } finally {
+    setSheetLoading(false);
+  }
+}
+
+async function loadFromSheets() {
+  if (isSheetRequestPending) return;
+
+  try {
+    setSheetLoading(true, '불러오는 중...');
+    const response = await fetch(APPS_SCRIPT_URL, {method: 'GET'});
+    if (response.status === 401) {
+      alert('❌ 불러오기 실패: Apps Script 웹앱 접근 권한이 없습니다. 배포 설정을 "모든 사용자"로 다시 확인하세요.');
+      return;
+    }
+    const allData = await response.json();
+    loadedSheetData = allData;
+
+    if (!allData || allData.length <= 1) {
+      alert('저장된 데이터가 없습니다.');
+      return;
+    }
+
+    // 시험 목록 추출 (중복 제거)
+    const tests = new Map();
+    for (let i = 1; i < allData.length; i++) {
+      const [testName, testRound, createdDate] = allData[i];
+      const key = testName + '|' + testRound;
+      if (!tests.has(key)) {
+        tests.set(key, {name: testName, round: testRound, date: createdDate});
+      }
+    }
+
+    if (tests.size === 0) {
+      alert('저장된 시험이 없습니다.');
+      return;
+    }
+
+    // 시험 선택 모달
+    showTestSelectModal(tests, allData);
+  } catch (err) {
+    alert(buildFetchErrorMessage('불러오기', err));
+  } finally {
+    setSheetLoading(false);
+  }
+}
+
+function showTestSelectModal(tests, allData) {
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    position:fixed; inset:0; background:rgba(0,0,0,0.5);
+    display:flex; align-items:center; justify-content:center; z-index:9999;
+  `;
+
+  let html = `
+    <div style="background:#fff; border-radius:12px; padding:24px; max-width:400px; width:90%;">
+      <h3 style="margin-bottom:16px; color:#1E293B;">저장된 시험 선택</h3>
+      <div style="max-height:300px; overflow-y:auto; margin-bottom:16px;">
+  `;
+
+  Array.from(tests.values()).forEach((test, idx) => {
+    html += `
+      <button onclick="selectTest('${test.name}', '${test.round}')" style="
+        width:100%; padding:10px; margin-bottom:6px;
+        background:#F3F5F2; border:1px solid #CDE8E0; border-radius:6px;
+        cursor:pointer; text-align:left; font-size:13px;
+      ">
+        <strong>${test.name}</strong> <span style="color:#64748B;">${test.round}</span>
+        <div style="font-size:11px; color:#94A3B8; margin-top:2px;">생성일: ${test.date}</div>
+      </button>
+    `;
+  });
+
+  html += `
+      </div>
+      <button onclick="document.body.removeChild(document.body.lastChild)" style="
+        width:100%; padding:8px; background:#E8E9E6;
+        border:none; border-radius:6px; cursor:pointer; font-size:13px;
+      ">취소</button>
+    </div>
+  `;
+
+  modal.innerHTML = html;
+  document.body.appendChild(modal);
+
+  window.selectTest = function(testName, testRound) {
+    loadTestData(testName, testRound, allData, true);
+    document.body.removeChild(modal);
+  };
+}
+
+function loadTestData(testName, testRound, allData, showAlert = true) {
+  // 기존 답안 초기화
+  for (const k in answers) delete answers[k];
+  lastAnswerTime = 0;
+
+  // 해당 시험 데이터만 불러오기
+  let createdDate = '';
+  for (let i = 1; i < allData.length; i++) {
+    const [dName, dRound, date, q, choice, time] = allData[i];
+    if (dName === testName && dRound === testRound) {
+      if (q && choice) {
+        answers[parseInt(q)] = {choice: parseInt(choice), time: parseInt(time) || 0};
+      }
+      if (!createdDate) createdDate = date;
+    }
+  }
+
+  // UI 업데이트
+  document.getElementById('test-name').value = testName;
+  document.getElementById('test-name-new').style.display = 'none';
+  updateRoundOptions(testName, testRound);
+  document.getElementById('test-round-new').value = '';
+  updateSelectionSummary();
+  setHeaderPanelOpen(false);
+
+  // 생성일 표시
+  const dateInfo = document.getElementById('test-date-info');
+  const dateDisplay = document.getElementById('test-date-display');
+  dateDisplay.textContent = createdDate;
+  dateInfo.style.display = 'block';
+
+  buildOMR();
+
+  if (showAlert) {
+    alert(`✅ "${testName}" (${testRound})을 불러왔습니다!`);
+  }
+}
+
+document.getElementById('btn-save-sheets').addEventListener('click', saveToSheets);
+document.getElementById('btn-load-sheets').addEventListener('click', loadFromSheets);
+
+/* ════════════════════════════
+   OMR
+════════════════════════════ */
+let totalQ = 100;
+const answers = {};   // {문제번호: {choice, time}}
+let tStartTime = null;  // 타이머 시작 시간
+let lastAnswerTime = 0;  // 마지막 답변 시간 (누적)
+
+function buildOMR() {
+  const list = document.getElementById('omr-list');
+  list.innerHTML = '';
+  for (let q = 1; q <= totalQ; q++) {
+    const row = document.createElement('div');
+    row.className = 'omr-row';
+    const numEl = document.createElement('div');
+    numEl.className = 'q-num';
+    numEl.textContent = q;
+    row.appendChild(numEl);
+
+    const choices = document.createElement('div');
+    choices.className = 'choices';
+    for (let c = 1; c <= 5; c++) {
+      const btn = document.createElement('button');
+      btn.className = 'choice-btn' + (answers[q]?.choice === c ? ' on' : '');
+      btn.textContent = c;
+      btn.addEventListener('click', () => toggleAnswer(q, c));
+      choices.appendChild(btn);
+    }
+    row.appendChild(choices);
+    list.appendChild(row);
+  }
+  document.getElementById('tot-cnt').textContent = totalQ;
+  refreshCount();
+}
+
+function toggleAnswer(q, c) {
+  if (answers[q]?.choice === c) {
+    delete answers[q];
+  } else {
+    // 타이머가 시작했을 때만 시간 기록
+    const elapsed = tStartTime !== null ? tElapsed : 0;
+    const timeTaken = elapsed - lastAnswerTime;  // 이 문제에 걸린 시간
+    answers[q] = {choice: c, time: timeTaken};
+    lastAnswerTime = elapsed;  // 다음 문제의 기준 시간 업데이트
+  }
+  // 해당 행의 버튼만 갱신
+  const rows = document.querySelectorAll('#omr-list .omr-row');
+  const row = rows[q - 1];
+  if (!row) return;
+  row.querySelectorAll('.choice-btn').forEach((btn, i) => {
+    btn.classList.toggle('on', answers[q]?.choice === i + 1);
+  });
+  refreshCount();
+}
+
+function refreshCount() {
+  document.getElementById('ans-cnt').textContent = Object.keys(answers).length;
+}
+
+document.getElementById('btn-apply').addEventListener('click', () => {
+  const v = parseInt(document.getElementById('q-count').value, 10);
+  if (v >= 1 && v <= 200) {
+    totalQ = v;
+    for (const k in answers) delete answers[k];
+    lastAnswerTime = 0;
+    buildOMR();
+  }
+});
+
+document.getElementById('btn-reset-ans').addEventListener('click', () => {
+  if (!confirm('모든 답안을 초기화할까요?')) return;
+  for (const k in answers) delete answers[k];
+  lastAnswerTime = 0;
+  buildOMR();
+});
+
+function formatTime(sec) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+document.getElementById('btn-score').addEventListener('click', () => {
+  const cnt = Object.keys(answers).length;
+  document.getElementById('m-score').textContent = cnt + '문제';
+  document.getElementById('m-detail').textContent =
+    `총 ${totalQ}문제 중 ${cnt}문제에 답안을 표시했습니다.`;
+
+  // 테이블 생성
+  const tbody = document.getElementById('score-tbody');
+  tbody.innerHTML = '';
+  const sortedAnswers = Object.keys(answers).sort((a, b) => parseInt(a) - parseInt(b));
+
+  sortedAnswers.forEach(q => {
+    const data = answers[q];
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${q}</td>
+      <td>${data.choice}</td>
+      <td>${formatTime(data.time)}</td>
+    `;
+    tbody.appendChild(row);
+  });
+
+  // 테이블 표시 여부
+  const table = document.getElementById('score-table');
+  if (cnt > 0) {
+    table.style.display = 'table';
+  } else {
+    table.style.display = 'none';
+  }
+
+  document.getElementById('modal-bg').classList.add('show');
+});
+
+document.getElementById('btn-close-modal').addEventListener('click', () => {
+  document.getElementById('modal-bg').classList.remove('show');
+});
+
+/* OMR 토글 */
+const layout   = document.getElementById('layout');
+const omrWrap  = document.getElementById('omr-wrap');
+const omrTab   = document.getElementById('omr-tab');
+let omrOpen = true;
+
+omrTab.addEventListener('click', () => {
+  omrOpen = !omrOpen;
+  omrWrap.classList.toggle('collapsed', !omrOpen);
+  layout.classList.toggle('omr-off', !omrOpen);
+  if (omrOpen) {
+    omrTab.style.left = '272px';
+    omrTab.textContent = '◀ OMR 숨기기';
+  } else {
+    omrTab.style.left = '0';
+    omrTab.textContent = '▶ OMR 보기';
+  }
+});
+
+/* ════════════════════════════
+   타이머
+════════════════════════════ */
+let tTotal = 100 * 60;  // 총 초
+let tElapsed = 0;
+let tInterval = null;
+let tState = 'stopped'; // stopped | running | paused
+
+const dispEl   = document.getElementById('timer-display');
+const startBtn = document.getElementById('btn-start');
+
+function fmtTimer(elapsed, total) {
+  const m = Math.floor(elapsed / 60);
+  const sec = elapsed % 60;
+  const totalMin = Math.floor(total / 60);
+  return `${String(m).padStart(2,'0')}분 ${String(sec).padStart(2,'0')}초 / ${totalMin}분`;
+}
+
+function renderTimer() {
+  dispEl.textContent = fmtTimer(tElapsed, tTotal);
+  dispEl.className = '';
+  const rem = tTotal - tElapsed;
+  if (rem <= 300) dispEl.classList.add('alert');
+  else if (rem <= 600) dispEl.classList.add('warn');
+}
+
+function tick() {
+  tElapsed++;
+  renderTimer();
+  if (tElapsed >= tTotal) {
+    clearInterval(tInterval);
+    tInterval = null;
+    tState = 'stopped';
+    startBtn.textContent = '시작';
+    startBtn.className = '';
+    alert('⏰ 시간이 종료되었습니다!');
+  }
+}
+
+startBtn.addEventListener('click', () => {
+  if (tState === 'stopped' || tState === 'paused') {
+    // 처음 시작할 때 tStartTime 설정
+    if (tState === 'stopped') {
+      tStartTime = Date.now();
+    }
+    tInterval = setInterval(tick, 1000);
+    tState = 'running';
+    startBtn.textContent = '일시정지';
+    startBtn.className = 'pause';
+  } else {
+    clearInterval(tInterval);
+    tInterval = null;
+    tState = 'paused';
+    startBtn.textContent = '재개';
+    startBtn.className = 'resume';
+  }
+});
+
+document.getElementById('btn-treset').addEventListener('click', () => {
+  clearInterval(tInterval);
+  tInterval = null;
+  tElapsed = 0;
+  tState = 'stopped';
+  tStartTime = null;
+  lastAnswerTime = 0;
+  startBtn.textContent = '시작';
+  startBtn.className = '';
+  renderTimer();
+});
+
+// 드롭다운 select 처리
+const timerSelect = document.getElementById('timer-select');
+timerSelect.addEventListener('change', () => {
+  const val = timerSelect.value;
+  let mins;
+
+  if (val === 'custom') {
+    const input = prompt('제한 시간을 입력하세요 (분):', '100');
+    if (input === null) {
+      timerSelect.value = '100';
+      return;
+    }
+    mins = parseInt(input, 10);
+    if (mins <= 0 || mins > 500 || isNaN(mins)) {
+      alert('1~500 사이의 숫자를 입력하세요.');
+      timerSelect.value = '100';
+      return;
+    }
+  } else {
+    mins = parseInt(val, 10);
+  }
+
+  tTotal = mins * 60;
+  tElapsed = 0;
+  tState = 'stopped';
+  tStartTime = null;
+  lastAnswerTime = 0;
+  clearInterval(tInterval);
+  tInterval = null;
+  startBtn.textContent = '시작';
+  startBtn.className = '';
+  renderTimer();
+});
+
+/* ════════════════════════════
+   탭 전환
+════════════════════════════ */
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const target = btn.dataset.p;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('on', b === btn));
+    document.querySelectorAll('.pane').forEach(p => {
+      p.classList.toggle('on', p.id === 'pane-' + target);
+    });
+    if (target === 'draw') {
+      requestAnimationFrame(() => initCanvas());
+    }
+  });
+});
+
+/* ════════════════════════════
+   메모장
+════════════════════════════ */
+document.getElementById('btn-clear-memo').addEventListener('click', () => {
+  document.getElementById('memo').value = '';
+});
+
+/* ════════════════════════════
+   그림판
+════════════════════════════ */
+const canvas  = document.getElementById('draw-canvas');
+const ctx     = canvas.getContext('2d');
+const wrap    = document.getElementById('canvas-wrap');
+
+let isDrawing = false;
+let lx = 0, ly = 0;
+let history   = [];   // ImageData 스택
+let pColor = '#1E293B';
+let pSize  = 3;
+let pMode  = 'pen';
+let canvasReady = false;
+
+/* 캔버스 초기화 (크기 설정) */
+function initCanvas() {
+  const w = wrap.clientWidth;
+  const h = wrap.clientHeight;
+  if (w === 0 || h === 0) return;
+
+  // 기존 내용을 임시 캔버스에 백업
+  let backup = null;
+  if (canvasReady && canvas.width > 0 && canvas.height > 0) {
+    const tmp = document.createElement('canvas');
+    tmp.width  = canvas.width;
+    tmp.height = canvas.height;
+    tmp.getContext('2d').drawImage(canvas, 0, 0);
+    backup = tmp;
+  }
+
+  canvas.width  = w;
+  canvas.height = h;
+
+  // 배경 칠
+  ctx.fillStyle = '#FAFCFF';
+  ctx.fillRect(0, 0, w, h);
+
+  // 내용 복원
+  if (backup) ctx.drawImage(backup, 0, 0);
+
+  canvasReady = true;
+}
+
+/* ResizeObserver로 캔버스 자동 리사이즈 */
+const ro = new ResizeObserver(() => {
+  if (document.getElementById('pane-draw').classList.contains('on')) {
+    initCanvas();
+  }
+});
+ro.observe(wrap);
+
+/* 좌표 계산 (고해상도 보정 포함) */
+function getXY(e) {
+  const r   = canvas.getBoundingClientRect();
+  const scX = canvas.width  / r.width;
+  const scY = canvas.height / r.height;
+  const src = e.touches ? e.touches[0] : e;
+  return {
+    x: (src.clientX - r.left) * scX,
+    y: (src.clientY - r.top)  * scY
+  };
+}
+
+/* 히스토리 저장 */
+function saveState() {
+  if (!canvasReady) return;
+  if (history.length >= 40) history.shift();
+  history.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+}
+
+/* 그리기 함수 */
+function draw(e) {
+  if (!isDrawing) return;
+  const { x, y } = getXY(e);
+  ctx.beginPath();
+  ctx.moveTo(lx, ly);
+  ctx.lineTo(x, y);
+  ctx.strokeStyle = pMode === 'eraser' ? '#FAFCFF' : pColor;
+  ctx.lineWidth   = pMode === 'eraser' ? pSize * 5 : pSize;
+  ctx.lineCap     = 'round';
+  ctx.lineJoin    = 'round';
+  ctx.stroke();
+  lx = x; ly = y;
+}
+
+canvas.addEventListener('mousedown', e => {
+  if (!canvasReady) initCanvas();
+  saveState();
+  isDrawing = true;
+  const { x, y } = getXY(e);
+  lx = x; ly = y;
+  // 점 찍기 (클릭만 해도 보이게)
+  ctx.beginPath();
+  ctx.arc(x, y, (pMode === 'eraser' ? pSize * 2.5 : pSize / 2), 0, Math.PI * 2);
+  ctx.fillStyle = pMode === 'eraser' ? '#FAFCFF' : pColor;
+  ctx.fill();
+});
+canvas.addEventListener('mousemove',  draw);
+canvas.addEventListener('mouseup',    () => { isDrawing = false; });
+canvas.addEventListener('mouseleave', () => { isDrawing = false; });
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (!canvasReady) initCanvas();
+  saveState();
+  isDrawing = true;
+  const { x, y } = getXY(e);
+  lx = x; ly = y;
+}, { passive: false });
+canvas.addEventListener('touchmove',  e => { e.preventDefault(); draw(e); }, { passive: false });
+canvas.addEventListener('touchend',   () => { isDrawing = false; });
+
+document.getElementById('pen-color').addEventListener('input', e => { pColor = e.target.value; });
+document.getElementById('pen-size').addEventListener('input',  e => { pSize  = +e.target.value; });
+document.getElementById('pen-mode').addEventListener('change', e => { pMode  = e.target.value; });
+
+document.getElementById('btn-undo').addEventListener('click', () => {
+  if (history.length === 0) return;
+  ctx.putImageData(history.pop(), 0, 0);
+});
+
+document.getElementById('btn-clear-canvas').addEventListener('click', () => {
+  saveState();
+  ctx.fillStyle = '#FAFCFF';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+});
+
+/* ════════════════════════════
+   계산기
+════════════════════════════ */
+const dispC = document.getElementById('calc-disp');
+const exprC = document.getElementById('calc-expr-row');
+
+let expr = '';
+let result = '0';
+let freshCalc = false;
+
+function evalExpr(e) {
+  try {
+    let s = e.replace(/÷/g, '/').replace(/×/g, '*');
+    s = s.replace(/(\d+(?:\.\d+)?)%/g, '($1/100)');
+    const r = Function('"use strict"; return (' + s + ')')();
+    if (!isFinite(r)) return null;
+    return parseFloat(r.toFixed(10)).toString();
+  } catch { return null; }
+}
+
+function updateCalcUI() {
+  dispC.textContent = result;
+  exprC.textContent = expr;
+}
+
+document.querySelectorAll('.cb').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const v = btn.dataset.v;
+
+    if (v === 'AC') {
+      expr = ''; result = '0'; freshCalc = false;
+    } else if (v === 'C') {
+      if (expr.length > 0) expr = expr.slice(0, -1);
+      const r = evalExpr(expr);
+      result = r !== null ? r : (expr || '0');
+    } else if (v === '=') {
+      const r = evalExpr(expr);
+      if (r !== null) {
+        exprC.textContent = expr + ' =';
+        result = r;
+        expr   = r;
+        freshCalc = true;
+      } else {
+        result = '오류';
+      }
+    } else if (v === '+/-') {
+      if (result !== '0' && result !== '오류') {
+        result = result.startsWith('-') ? result.slice(1) : '-' + result;
+        // 수식 끝 숫자도 토글
+        const m = expr.match(/^(-?\d+(?:\.\d+)?)$/);
+        if (m) expr = result;
+      }
+    } else {
+      if (freshCalc && /[\d.]/.test(v)) { expr = ''; freshCalc = false; }
+      else freshCalc = false;
+      expr += v;
+      const r = evalExpr(expr);
+      if (r !== null) result = r;
+    }
+    updateCalcUI();
+  });
+});
+
+// 키보드 입력
+document.addEventListener('keydown', e => {
+  if (document.activeElement.tagName === 'TEXTAREA' ||
+      document.activeElement.tagName === 'INPUT') return;
+  const map = {
+    '0':'0','1':'1','2':'2','3':'3','4':'4',
+    '5':'5','6':'6','7':'7','8':'8','9':'9',
+    '+':'+','-':'-','*':'×','/':'÷',
+    '%':'%','.':'.','(':'(', ')':')',
+    'Enter':'=','Backspace':'C'
+  };
+  if (map[e.key]) {
+    e.preventDefault();
+    document.querySelector(`.cb[data-v="${map[e.key]}"]`)?.click();
+  }
+});
+
+/* ════════════════════════════
+   초기 실행
+════════════════════════════ */
+setHeaderPanelOpen(false);
+updateSelectionSummary();
+buildOMR();
+renderTimer();
+</script>
+
+</body>
+</html>
