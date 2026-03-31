@@ -14,15 +14,38 @@
 ```javascript
 function doPost(e) {
   const sheet = SpreadsheetApp.getActiveSheet();
-  const data = JSON.parse(e.postData.contents);
+  const payload = JSON.parse(e.postData.contents);
+  const rows = Array.isArray(payload) ? payload : payload.rows || [];
 
   if (sheet.getLastRow() === 0) {
     sheet.appendRow(['시험이름', '회차', '생성일', '문항', '답', '소요시간(초)']);
   }
 
-  data.forEach(row => {
-    sheet.appendRow(row);
-  });
+  if (rows.length === 0) {
+    return ContentService.createTextOutput(JSON.stringify({ success: false, message: 'rows is empty' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  const testName = rows[0][0];
+  const testRound = rows[0][1];
+  const lastRow = sheet.getLastRow();
+
+  if (lastRow > 1) {
+    const existingRows = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
+    const rowIndexesToDelete = [];
+
+    existingRows.forEach((row, index) => {
+      if (row[0] === testName && row[1] === testRound) {
+        rowIndexesToDelete.push(index + 2);
+      }
+    });
+
+    for (let i = rowIndexesToDelete.length - 1; i >= 0; i--) {
+      sheet.deleteRow(rowIndexesToDelete[i]);
+    }
+  }
+
+  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
 
   return ContentService.createTextOutput(JSON.stringify({ success: true }))
     .setMimeType(ContentService.MimeType.JSON);
