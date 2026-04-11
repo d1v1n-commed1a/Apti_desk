@@ -1,6 +1,6 @@
 # Apti desk
 
-단일 HTML 기반의 인적성 학습 도구입니다. 현재 배포용 기준 파일은 `Apti_desk_v0.130.html`입니다.
+단일 HTML 기반의 인적성 학습 도구입니다. Git 기준 배포 파일은 `Apti_desk_v0.130.html` 하나만 관리합니다.
 
 ## 주요 기능
 
@@ -28,6 +28,7 @@
 ## 파일 구성
 
 - `Apti_desk_v0.130.html`: 배포/공유 기준 단일 실행 파일
+- `apps_script/Code.gs`: Google Sheets 연동용 Apps Script
 - `apti_desk_icon.svg`
 - `apti_desk_icon.png`
 
@@ -35,7 +36,7 @@
 
 현재 HTML은 아래 16개 컬럼 구조로 저장합니다.
 
-`시험명`, `회차`, `생성일`, `총문항수`, `문항`, `과목순번`, `과목명`, `과목문항`, `1차답`, `1차시간`, `정답`, `1차결과`, `오답정리답`, `오답정리시간`, `재채점결과`, `정답표시`
+`시험명`, `회차`, `생성일`, `총문항수`, `문항`, `과목순서`, `과목명`, `과목내문항번호`, `원본답`, `원본소요시간(초)`, `정답`, `원본채점결과`, `재도전답`, `재도전소요시간(초)`, `재도전채점결과`, `정답표시여부`
 
 같은 `시험명 + 회차` 조합으로 저장하면 기존 데이터를 덮어씁니다.
 
@@ -43,11 +44,212 @@
 
 Google 스프레드시트에서 `확장프로그램 > Apps Script`로 들어가 웹앱을 만들고, HTML 상단의 `window.APTI_SHARE_CONFIG.APPS_SCRIPT_URL` 값을 본인 `/exec` URL로 바꾸면 됩니다.
 
-Apps Script는 아래 동작만 만족하면 됩니다.
+### 1. 스프레드시트 준비
+
+1. 새 Google 스프레드시트를 하나 만듭니다.
+2. 기록용 시트를 하나 선택해 둡니다.
+3. 이후 Apps Script는 "현재 활성 시트"에 저장하므로, 별도 수정이 없다면 이 시트가 저장 대상이 됩니다.
+
+### 2. Apps Script 코드 넣기
+
+1. 스프레드시트에서 `확장프로그램 > Apps Script`로 이동합니다.
+2. 기본으로 생성된 코드를 지우고 저장소의 `apps_script/Code.gs` 내용을 그대로 붙여넣습니다.
+3. 저장합니다.
+
+현재 저장소에 포함된 Apps Script는 아래 역할을 합니다.
 
 1. `POST`로 받은 `testName`, `testRound`, `rows` 저장
 2. 같은 `시험명 + 회차` 기존 행 삭제 후 새 행으로 교체
 3. `GET` 요청 시 전체 데이터 JSON 반환
+
+핵심 헤더는 다음과 같습니다.
+
+```javascript
+const HEADERS = [
+  '시험이름',
+  '회차',
+  '생성일',
+  '총문항수',
+  '문항',
+  '과목순서',
+  '과목명',
+  '과목내문항번호',
+  '원본답',
+  '원본소요시간(초)',
+  '정답',
+  '원본채점결과',
+  '재도전답',
+  '재도전소요시간(초)',
+  '재도전채점결과',
+  '정답표시여부',
+];
+```
+
+앱이 보내는 `rows`가 이 구조에 맞게 정리되어 들어오며, Apps Script는 행 길이를 자동 보정한 뒤 저장합니다.
+
+### 3. 웹앱 배포
+
+1. Apps Script 화면에서 `배포 > 새 배포`
+2. 유형: `웹 앱`
+3. 실행 권한: `나`
+4. 액세스 권한: `모든 사용자`
+5. 배포 후 생성된 웹앱 URL 복사
+
+주의:
+
+- URL은 반드시 `/exec` 로 끝나는 배포 URL이어야 합니다.
+- `/dev` URL을 넣으면 브라우저에서 저장/불러오기가 불안정할 수 있습니다.
+- 권한을 바꿨으면 반드시 재배포 후 새 URL로 다시 교체해야 합니다.
+
+### 4. HTML에 URL 반영
+
+`Apti_desk_v0.130.html` 상단에서 아래 값을 본인 웹앱 URL로 바꿉니다.
+
+```html
+window.APTI_SHARE_CONFIG = Object.freeze({
+  APPS_SCRIPT_URL: '여기에_본인_웹앱_URL/exec'
+});
+```
+
+### 5. Apps Script 전체 코드
+
+필요하면 아래 코드를 직접 복사해도 됩니다. 저장소의 `apps_script/Code.gs`와 동일한 내용입니다.
+
+```javascript
+const HEADERS = [
+  '시험이름',
+  '회차',
+  '생성일',
+  '총문항수',
+  '문항',
+  '과목순서',
+  '과목명',
+  '과목내문항번호',
+  '원본답',
+  '원본소요시간(초)',
+  '정답',
+  '원본채점결과',
+  '재도전답',
+  '재도전소요시간(초)',
+  '재도전채점결과',
+  '정답표시여부',
+];
+
+function doPost(e) {
+  try {
+    const payload = parsePayload_(e);
+    const rows = normalizeRows_(payload.rows);
+
+    if (rows.length === 0) {
+      return jsonResponse_({ success: false, message: 'rows is empty' });
+    }
+
+    const sheet = getSheet_();
+    ensureHeader_(sheet);
+
+    const testName = String(payload.testName || rows[0][0] || '').trim();
+    const testRound = String(payload.testRound || rows[0][1] || '').trim();
+
+    if (!testName || !testRound) {
+      return jsonResponse_({ success: false, message: 'testName or testRound is empty' });
+    }
+
+    const lastRow = sheet.getLastRow();
+    const existingRows = lastRow > 1
+      ? sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues()
+      : [];
+
+    const preservedRows = existingRows.filter(function(row) {
+      return !(String(row[0]).trim() === testName && String(row[1]).trim() === testRound);
+    });
+
+    sheet.clearContents();
+    sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+
+    const nextRows = preservedRows.concat(rows);
+    if (nextRows.length > 0) {
+      sheet.getRange(2, 1, nextRows.length, HEADERS.length).setValues(nextRows);
+    }
+
+    return jsonResponse_({
+      success: true,
+      savedRows: rows.length,
+      testName: testName,
+      testRound: testRound,
+    });
+  } catch (error) {
+    return jsonResponse_({
+      success: false,
+      message: error && error.message ? error.message : String(error),
+    });
+  }
+}
+
+function doGet() {
+  const sheet = getSheet_();
+  ensureHeader_(sheet);
+  const data = sheet.getDataRange().getValues();
+  return jsonResponse_(data);
+}
+
+function parsePayload_(e) {
+  if (!e || !e.postData || !e.postData.contents) {
+    throw new Error('postData.contents is empty');
+  }
+
+  const payload = JSON.parse(e.postData.contents);
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('invalid JSON payload');
+  }
+
+  return payload;
+}
+
+function normalizeRows_(rows) {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+
+  return rows
+    .filter(function(row) {
+      return Array.isArray(row);
+    })
+    .map(function(row) {
+      const normalized = row.slice(0, HEADERS.length);
+      while (normalized.length < HEADERS.length) {
+        normalized.push('');
+      }
+      return normalized;
+    });
+}
+
+function getSheet_() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  return spreadsheet.getActiveSheet();
+}
+
+function ensureHeader_(sheet) {
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+    return;
+  }
+
+  const currentHeader = sheet.getRange(1, 1, 1, HEADERS.length).getValues()[0];
+  const needsUpdate = HEADERS.some(function(header, index) {
+    return currentHeader[index] !== header;
+  });
+
+  if (needsUpdate) {
+    sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+  }
+}
+
+function jsonResponse_(data) {
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+```
 
 ## 실행 방법
 
@@ -75,6 +277,7 @@ python3 -m http.server 8000
 
 ## 주의 사항
 
+- Git에는 `Apti_desk_v0.130.html`만 배포 파일로 올리고, `Apti_desk_배포용.html`과 `Apti_desk.html`은 제외합니다.
 - 저장/불러오기가 실패하면 Apps Script 웹앱 권한이 `모든 사용자`인지 확인해야 합니다.
 - 웹앱 URL은 반드시 `/exec`로 끝나는 배포 URL이어야 합니다.
 - `file://`로 직접 열면 브라우저 정책 때문에 저장/불러오기가 차단될 수 있습니다.
