@@ -15,7 +15,7 @@
    2. 반드시 /exec 로 끝나는 배포 URL 사용
 ════════════════════════════ */
 window.APTI_SHARE_CONFIG = Object.freeze({
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/{SCRIPT_ID}/exec'
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyMfpRefZ0qWduXD1VtKfboC_l9hJY_uDFKN0e1pFJkJtsfu2NxIvWVc1mpTHO2R0qgoA/exec'
 });
 </script>
 <style>
@@ -1908,9 +1908,8 @@ function showTestSelectModal(tests, allData) {
 
 function loadTestData(testName, testRound, allData, showAlert = true) {
   // 기존 답안 초기화
+  clearActiveQuestionTiming();
   for (const k in answers) delete answers[k];
-  lastAnswerTime = 0;
-  lastRetryAnswerTime = 0;
 
   // 해당 시험 데이터만 불러오기
   let createdDate = '';
@@ -2021,10 +2020,9 @@ document.getElementById('btn-load-sheets').addEventListener('click', loadFromShe
 let totalQ = 100;
 const answers = {};
 let tStartTime = null;  // 타이머 시작 시간
-let lastAnswerTime = 0;  // 마지막 답변 시간 (누적)
-let lastRetryAnswerTime = 0;
 let isScoredMode = false;
 let subjectConfigs = [{name: '전체', count: 100}];
+let activeQuestionTiming = null;
 
 function getDefaultSubjectConfigsForTest(testName) {
   if (testName === 'SK그룹 SKCT') {
@@ -2113,6 +2111,7 @@ function updateSubjectConfigSummary() {
 }
 
 function applySubjectConfigs(configs, options = {}) {
+  clearActiveQuestionTiming();
   subjectConfigs = normalizeSubjectConfigs(configs);
   totalQ = subjectConfigs.reduce((sum, subject) => sum + subject.count, 0);
   document.getElementById('q-count').value = totalQ;
@@ -2121,8 +2120,6 @@ function applySubjectConfigs(configs, options = {}) {
 
   if (options.clearAnswers) {
     for (const k in answers) delete answers[k];
-    lastAnswerTime = 0;
-    lastRetryAnswerTime = 0;
     isScoredMode = false;
   }
 
@@ -2226,6 +2223,62 @@ function cleanupAnswerMeta(q) {
   }
 }
 
+function addTimeToQuestion(q, kind, delta) {
+  if (!delta) return;
+  const current = ensureAnswerMeta(q);
+  const key = kind === 'retry' ? 'retryTime' : 'originalTime';
+  answers[q] = normalizeAnswerMeta({
+    ...current,
+    [key]: Math.max(0, current[key] + delta),
+  });
+}
+
+function flushActiveQuestionTiming() {
+  if (!activeQuestionTiming || activeQuestionTiming.startedAt == null) return;
+  const elapsed = getTotalElapsedForAnswers();
+  const delta = Math.max(0, elapsed - activeQuestionTiming.startedAt);
+  addTimeToQuestion(activeQuestionTiming.question, activeQuestionTiming.kind, delta);
+  activeQuestionTiming.startedAt = elapsed;
+}
+
+function setActiveQuestionTiming(question, kind) {
+  const elapsed = getTotalElapsedForAnswers();
+  flushActiveQuestionTiming();
+
+  if (
+    activeQuestionTiming &&
+    activeQuestionTiming.question === question &&
+    activeQuestionTiming.kind === kind
+  ) {
+    activeQuestionTiming.startedAt = elapsed;
+    return;
+  }
+
+  activeQuestionTiming = {
+    question,
+    kind,
+    startedAt: tState === 'running' ? elapsed : null,
+  };
+}
+
+function pauseActiveQuestionTiming() {
+  flushActiveQuestionTiming();
+  if (activeQuestionTiming) {
+    activeQuestionTiming.startedAt = null;
+  }
+}
+
+function resumeActiveQuestionTiming() {
+  if (activeQuestionTiming && activeQuestionTiming.startedAt == null) {
+    activeQuestionTiming.startedAt = getTotalElapsedForAnswers();
+  }
+}
+
+function clearActiveQuestionTiming() {
+  flushActiveQuestionTiming();
+  activeQuestionTiming = null;
+}
+
 function setCorrectChoice(q, correctChoice) {
   const next = normalizeAnswerMeta({
     ...ensureAnswerMeta(q),
@@ -2289,7 +2342,7 @@ function buildOMR() {
     numEl.type = 'button';
     numEl.className =
       'q-num' +
-      (isScoredMode && answer.isCorrect === false ? ' reviewable' : '') +
+      (isScoredMode && (answer.isCorrect === false || answer.originalChoice === null) ? ' reviewable' : '') +
       (isScoredMode && answer.showCorrectAnswer ? ' answer-key' : '') +
       (isScoredMode && answer.retryChoice !== null ? ' active' : '');
     numEl.textContent = questionMeta.subjectQuestionNumber;
@@ -2347,7 +2400,7 @@ function buildOMR() {
 function handleChoiceClick(q, c) {
   const current = ensureAnswerMeta(q);
   if (isScoredMode) {
-    if (current.isCorrect === false) {
+    if (current.isCorrect === false || current.originalChoice === null) {
       toggleRetryAnswer(q, c);
     }
     return;
@@ -2357,6 +2410,7 @@ function handleChoiceClick(q, c) {
 
 function toggleAnswer(q, c) {
   if (isScoredMode) return;
+  setActiveQuestionTiming(q, 'original');
   const current = ensureAnswerMeta(q);
   if (current.originalChoice === c) {
     answers[q] = normalizeAnswerMeta({
@@ -2371,19 +2425,15 @@ function toggleAnswer(q, c) {
       retryActive: false,
     });
   } else {
-    const elapsed = tStartTime !== null ? getTotalElapsedForAnswers() : 0;
-    const timeTaken = Math.max(0, elapsed - lastAnswerTime);
     answers[q] = normalizeAnswerMeta({
       ...current,
       originalChoice: c,
-      originalTime: timeTaken,
       retryChoice: null,
       retryTime: 0,
       retryCorrect: null,
       showCorrectAnswer: false,
       retryActive: false,
     });
-    lastAnswerTime = elapsed;
   }
   cleanupAnswerMeta(q);
   buildOMR();
@@ -2391,7 +2441,8 @@ function toggleAnswer(q, c) {
 
 function toggleRetryAnswer(q, c) {
   const current = ensureAnswerMeta(q);
-  if (!isScoredMode || current.isCorrect !== false) return;
+  if (!isScoredMode || !(current.isCorrect === false || current.originalChoice === null)) return;
+  setActiveQuestionTiming(q, 'retry');
   if (current.retryChoice === c) {
     answers[q] = normalizeAnswerMeta({
       ...current,
@@ -2402,22 +2453,19 @@ function toggleRetryAnswer(q, c) {
       retryActive: false,
     });
   } else {
-    const elapsed = tStartTime !== null ? getTotalElapsedForAnswers() : 0;
-    const timeTaken = Math.max(0, elapsed - lastRetryAnswerTime);
     answers[q] = normalizeAnswerMeta({
       ...current,
       retryChoice: c,
-      retryTime: timeTaken,
       retryCorrect: null,
       showCorrectAnswer: false,
       retryActive: true,
     });
-    lastRetryAnswerTime = elapsed;
   }
   buildOMR();
 }
 
 function cancelScoreMode() {
+  clearActiveQuestionTiming();
   isScoredMode = false;
   for (let q = 1; q <= totalQ; q++) {
     if (!answers[q]) continue;
@@ -2463,9 +2511,8 @@ document.getElementById('btn-apply').addEventListener('click', () => {
 
 document.getElementById('btn-reset-ans').addEventListener('click', () => {
   if (!confirm('모든 답안을 초기화할까요?')) return;
+  clearActiveQuestionTiming();
   for (const k in answers) delete answers[k];
-  lastAnswerTime = 0;
-  lastRetryAnswerTime = 0;
   isScoredMode = false;
   buildOMR();
 });
@@ -2699,6 +2746,7 @@ function openScoreModal(title, detail) {
 }
 
 function scoreAnswers() {
+  clearActiveQuestionTiming();
   let answeredCount = 0;
   let correctCount = 0;
   let missingKeyCount = 0;
@@ -2728,7 +2776,8 @@ function scoreAnswers() {
       }
     }
 
-    if (next.isCorrect === false && next.retryChoice !== null) {
+    const isRetryTarget = next.retryChoice !== null && (next.isCorrect === false || next.originalChoice === null);
+    if (isRetryTarget) {
       rescoredCount += 1;
       if (next.correctChoice !== null) {
         next.retryCorrect = next.retryChoice === next.correctChoice;
@@ -2856,11 +2905,11 @@ function getTotalElapsedForAnswers() {
 }
 
 function resetTimerTracking() {
+  clearActiveQuestionTiming();
   tElapsed = 0;
   sessionElapsed = 0;
   tState = 'stopped';
   tStartTime = null;
-  lastAnswerTime = 0;
   clearInterval(tInterval);
   tInterval = null;
   startBtn.textContent = '시작';
@@ -2975,6 +3024,7 @@ function renderTimer() {
 }
 
 function finishTimerCycle() {
+  pauseActiveQuestionTiming();
   clearInterval(tInterval);
   tInterval = null;
   tState = 'stopped';
@@ -3051,11 +3101,13 @@ startBtn.addEventListener('click', () => {
         syncMockPhase(false);
       }
     }
+    resumeActiveQuestionTiming();
     tInterval = setInterval(tick, 1000);
     tState = 'running';
     startBtn.textContent = '일시정지';
     startBtn.className = 'pause';
   } else {
+    pauseActiveQuestionTiming();
     clearInterval(tInterval);
     tInterval = null;
     tState = 'paused';
